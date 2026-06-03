@@ -34,7 +34,6 @@ def init_db():
     conn = sqlite3.connect("vpn_bot.db")
     cursor = conn.cursor()
     
-    # Users Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -46,7 +45,6 @@ def init_db():
         )
     ''')
     
-    # Servers Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS servers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +61,6 @@ def init_db():
         )
     ''')
     
-    # Vouchers Table (Voucher စနစ်အတွက်)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS vouchers (
             code TEXT PRIMARY KEY,
@@ -73,7 +70,6 @@ def init_db():
         )
     ''')
     
-    # User Keys Table (ဝယ်ထားသော Key များ၏ GB လက်ကျန်စစ်ရန်)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_keys (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +87,6 @@ def init_db():
 # ၃။ 3X-UI PANEL API HELPER FUNCTIONS
 # ========================================================
 def login_3xui(panel_url, username, password):
-    """3X-UI Panel ထဲသို့ API စနစ်သစ်ဖြင့် Login ဝင်ခြင်း"""
     session = requests.Session()
     try:
         login_url = f"{panel_url.rstrip('/')}/login"
@@ -157,9 +152,15 @@ def get_main_menu():
     btn_reg = types.InlineKeyboardButton("📝 Register", callback_data="main_register")
     btn_ref = types.InlineKeyboardButton("🔗 Refer", callback_data="main_refer")
     btn_gen = types.InlineKeyboardButton("🔑 Generate Key", callback_data="main_genkey")
-    btn_mykeys = types.InlineKeyboardButton("📊 My Keys", callback_data="main_mykeys") # ခလုတ်အသစ်
+    btn_mykeys = types.InlineKeyboardButton("📊 My Keys", callback_data="main_mykeys")
     btn_status = types.InlineKeyboardButton("🖥️ Server Status", callback_data="main_status")
     markup.add(btn_info, btn_reg, btn_ref, btn_gen, btn_mykeys, btn_status)
+    return markup
+
+# နောက်ကို ပြန်သွားမည့် Back Button ကို သီးသန့်ရေးဆွဲထားခြင်း
+def get_back_button():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu"))
     return markup
 
 # ========================================================
@@ -195,7 +196,6 @@ def start_cmd(message):
     
     bot.send_message(message.chat.id, "✨ Premium VPN Bot မှ ကြိုဆိုပါတယ်ဗျာ။\nအောက်ပါ ခလုတ်များကို အသုံးပြုနိုင်ပါတယ်-", reply_markup=get_main_menu())
 
-# --- User: /get {voucher code} စနစ် ---
 @bot.message_handler(commands=['get'])
 def redeem_voucher_cmd(message):
     try:
@@ -212,7 +212,6 @@ def redeem_voucher_cmd(message):
                 bot.reply_to(message, "⚠️ ဤ Voucher ကို အသုံးပြုပြီးသား ဖြစ်နေပါသည်ဗျာ။")
             else:
                 amount = row[0]
-                # Update Voucher as used and add Credits
                 cursor.execute("UPDATE vouchers SET is_used = 1, used_by = ? WHERE code = ?", (tg_id, code))
                 cursor.execute("UPDATE users SET credits = credits + ? WHERE telegram_id = ?", (amount, tg_id))
                 conn.commit()
@@ -227,6 +226,7 @@ def redeem_voucher_cmd(message):
 def handle_callbacks(call):
     tg_id = call.from_user.id
     chat_id = call.message.chat.id
+    msg_id = call.message.message_id # မူလစာသားကို edit လုပ်ရန် message ID မှတ်ထားခြင်း
     
     conn = sqlite3.connect("vpn_bot.db")
     conn.row_factory = sqlite3.Row
@@ -235,12 +235,19 @@ def handle_callbacks(call):
     cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (tg_id,))
     user = cursor.fetchone()
     
-    if call.data == "main_info":
+    # --- Main Menu သို့ ပြန်သွားမည့်စနစ် ---
+    if call.data == "main_menu":
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, 
+                              text="✨ Premium VPN Bot မှ ကြိုဆိုပါတယ်ဗျာ။\nအောက်ပါ ခလုတ်များကို အသုံးပြုနိုင်ပါတယ်-", 
+                              reply_markup=get_main_menu())
+                              
+    elif call.data == "main_info":
         msg = f"👤 *User Profile Info*\n\n"
         msg += f"🆔 Telegram ID: `{user['telegram_id']}`\n"
         msg += f"🎖️ Role Status: *{user['role'].upper()}*\n"
         msg += f"💰 Credit လက်ကျန်: *{user['credits']} Credits*"
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=get_main_menu())
+        # အသစ်မပို့တော့ဘဲ edit_message_text ဖြင့် မူလ Box ကိုသာ ပြောင်းလိုက်ခြင်း
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="Markdown", reply_markup=get_back_button())
         
     elif call.data == "main_register":
         if user['is_registered'] == 1:
@@ -250,26 +257,27 @@ def handle_callbacks(call):
             if user['referred_by']:
                 cursor.execute("UPDATE users SET credits = credits + 10 WHERE telegram_id = ?", (user['referred_by'],))
                 try:
+                    # Referred User ဆီသို့ Alert လှမ်းပို့ခြင်း (ဒါကတော့ Chat ID မတူလို့ send_message ပဲ သုံးရပါမည်)
                     bot.send_message(user['referred_by'], f"🎉 လူကြီးမင်း ဖိတ်ခေါ်ထားသူတစ်ဦး အောင်မြင်စွာ Register လုပ်သွားသဖြင့် Reward *+10 Credits* ရရှိပါပြီဗျာ။", parse_mode="Markdown")
                 except:
                     pass
             conn.commit()
             bot.answer_callback_query(call.id, "အကောင့်ဖွင့်ခြင်း အောင်မြင်ပြီး Bonus +1 Credit ရရှိပါပြီ။", show_alert=True)
-            bot.send_message(chat_id, "📝 Register အောင်မြင်သွားပါပြီဗျာ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="📝 Register အောင်မြင်သွားပါပြီဗျာ။\n\n🎁 Bonus: +1 Credit", reply_markup=get_back_button())
             
     elif call.data == "main_refer":
         ref_link = f"https://t.me/{BOT_USERNAME}?start=REF_{tg_id}"
         msg = f"🔗 *လူကြီးမင်း၏ သီးသန့် Referral Link*\n\n"
         msg += f"`{ref_link}`\n\n"
         msg += f"💡 ဤလင့်ခ်ကို ကူးယူ၍ မိတ်ဆွေများကို ဖိတ်ခေါ်ပါ။ ထိုသူမှဝင်ရောက် Register လုပ်လျှင် လူကြီးမင်းထံ *+10 Credits* အလိုအလျောက် ရောက်ရှိပါမည်။"
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=get_main_menu())
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="Markdown", reply_markup=get_back_button())
         
     elif call.data == "main_status":
         cursor.execute("SELECT * FROM servers")
         servers = cursor.fetchall()
         
         if not servers:
-            bot.send_message(chat_id, "⚠️ လက်ရှိတွင် ထည့်သွင်းထားသော ဆာဗာမရှိသေးပါဗျာ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚠️ လက်ရှိတွင် ထည့်သွင်းထားသော ဆာဗာမရှိသေးပါဗျာ။", reply_markup=get_back_button())
         else:
             msg = "🖥️ *Server Live Status & Bandwidth Pool*\n\n"
             for srv in servers:
@@ -285,9 +293,8 @@ def handle_callbacks(call):
                 msg += f"   စုစုပေါင်း: {srv['total_bandwidth']} GB\n"
                 msg += f"   အသုံးပြုပြီး: {srv['used_bandwidth']:.2f} GB\n"
                 msg += f"   လက်ကျန်: {rem_bw:.2f} GB\n\n"
-            bot.send_message(chat_id, msg, parse_mode="HTML", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="HTML", reply_markup=get_back_button())
 
-    # --- သုံးစွဲသူများ မိမိတို့ Key အခြေအနေစစ်ဆေးရန် ---
     elif call.data == "main_mykeys":
         cursor.execute("""
             SELECT uk.email, uk.total_gb, s.name, s.panel_url, s.username, s.password 
@@ -298,10 +305,10 @@ def handle_callbacks(call):
         user_keys = cursor.fetchall()
         
         if not user_keys:
-            bot.send_message(chat_id, "⚠️ လူကြီးမင်းတွင် ဝယ်ယူထားသော Key မရှိသေးပါဗျာ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚠️ လူကြီးမင်းတွင် ဝယ်ယူထားသော Key မရှိသေးပါဗျာ။", reply_markup=get_back_button())
             return
             
-        bot.send_message(chat_id, "⏳ ခေတ္တစောင့်ပါ... ဆာဗာမှ Data အသုံးပြုမှု အခြေအနေကို စစ်ဆေးနေပါသည်။")
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⏳ ခေတ္တစောင့်ပါ... ဆာဗာမှ Data အသုံးပြုမှု အခြေအနေကို စစ်ဆေးနေပါသည်။")
         
         msg = "📊 *လူကြီးမင်း၏ VPN Keys အသုံးပြုမှုများ*\n\n"
         for k in user_keys:
@@ -313,7 +320,6 @@ def handle_callbacks(call):
             
             if session:
                 try:
-                    # 3X-UI ၏ Client Traffic API ဖြင့်စစ်ဆေးခြင်း
                     traf_url = f"{panel.rstrip('/')}/panel/api/inbounds/getClientTraffics/{email}"
                     res = session.get(traf_url, timeout=5, verify=False)
                     if res.status_code == 200 and res.json().get("success"):
@@ -336,7 +342,7 @@ def handle_callbacks(call):
             msg += f"📉 *Remaining:* `{rem_gb_str}`\n"
             msg += "--------------------------\n"
             
-        bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=get_main_menu())
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="Markdown", reply_markup=get_back_button())
 
     elif call.data == "main_genkey":
         if user['credits'] < 1:
@@ -345,7 +351,8 @@ def handle_callbacks(call):
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(types.InlineKeyboardButton("Vless", callback_data="proto_vless"),
                    types.InlineKeyboardButton("Hysteria2", callback_data="proto_hysteria2"))
-        bot.send_message(chat_id, "⚙️ *အဆင့် (၁)* - အသုံးပြုလိုသည့် VPN Protocol ကို ရွေးချယ်ပေးပါ-", parse_mode="Markdown", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu"))
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚙️ *အဆင့် (၁)* - အသုံးပြုလိုသည့် VPN Protocol ကို ရွေးချယ်ပေးပါ-", parse_mode="Markdown", reply_markup=markup)
 
     elif call.data.startswith("proto_"):
         selected_proto = call.data.split("_")[1]
@@ -354,13 +361,14 @@ def handle_callbacks(call):
         servers = cursor.fetchall()
         
         if not servers:
-            bot.send_message(chat_id, f"⚠️ လက်ရှိတွင် {selected_proto.upper()} အတွက် ဆာဗာများ အဆင်မသင့်ဖြစ်သေးပါဗျာ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=f"⚠️ လက်ရှိတွင် {selected_proto.upper()} အတွက် ဆာဗာများ အဆင်မသင့်ဖြစ်သေးပါဗျာ။", reply_markup=get_back_button())
             return
             
         markup = types.InlineKeyboardMarkup(row_width=2)
         for srv in servers:
             markup.add(types.InlineKeyboardButton(f"{srv['name']}", callback_data=f"srv_{srv['id']}"))
-        bot.send_message(chat_id, "🌍 *အဆင့် (၂)* - အသုံးပြုလိုသည့် ဆာဗာတည်နေရာကို ရွေးချယ်ပေးပါ-", parse_mode="Markdown", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("🔙 Back to Protocols", callback_data="main_genkey"))
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="🌍 *အဆင့် (၂)* - အသုံးပြုလိုသည့် ဆာဗာတည်နေရာကို ရွေးချယ်ပေးပါ-", parse_mode="Markdown", reply_markup=markup)
 
     elif call.data.startswith("srv_"):
         srv_id = int(call.data.split("_")[1])
@@ -369,18 +377,19 @@ def handle_callbacks(call):
         gbs = [1, 10, 50, 100, 200]
         buttons = [types.InlineKeyboardButton(f"{g} GB", callback_data=f"gb_{g}") for g in gbs]
         markup.add(*buttons)
-        bot.send_message(chat_id, "📊 *အဆင့် (၃)* - ဝယ်ယူအသုံးပြုမည့် Data GB ပမာဏကို ရွေးချယ်ပေးပါ-\n_(1 GB လျှင် 1 Credit နှုတ်ယူပါမည်)_", parse_mode="Markdown", reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("🔙 Cancel / Back to Main Menu", callback_data="main_menu"))
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="📊 *အဆင့် (၃)* - ဝယ်ယူအသုံးပြုမည့် Data GB ပမာဏကို ရွေးချယ်ပေးပါ-\n_(1 GB လျှင် 1 Credit နှုတ်ယူပါမည်)_", parse_mode="Markdown", reply_markup=markup)
 
     elif call.data.startswith("gb_"):
         selected_gb = int(call.data.split("_")[1])
         steps = user_steps.get(tg_id)
         
         if not steps:
-            bot.send_message(chat_id, "⚠️ လုပ်ငန်းစဉ် အချိန်လွန်သွားပါပြီ။ အစက ပြန်လုပ်ပေးပါ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚠️ လုပ်ငန်းစဉ် အချိန်လွန်သွားပါပြီ။ အစက ပြန်လုပ်ပေးပါ။", reply_markup=get_back_button())
             return
             
         if user['credits'] < selected_gb:
-            bot.send_message(chat_id, f"⚠️ ခရက်ဒစ်မလုံလောက်ပါ။ ရွေးချယ်ထားသော GB: {selected_gb} GB, လူကြီးမင်းလက်ကျန်: {user['credits']} Credits", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=f"⚠️ ခရက်ဒစ်မလုံလောက်ပါ။ ရွေးချယ်ထားသော GB: {selected_gb} GB, လူကြီးမင်းလက်ကျန်: {user['credits']} Credits", reply_markup=get_back_button())
             return
             
         cursor.execute("SELECT * FROM servers WHERE id = ?", (steps['server_id'],))
@@ -388,7 +397,7 @@ def handle_callbacks(call):
         
         rem_server_bw = server_info['total_bandwidth'] - server_info['used_bandwidth']
         if rem_server_bw < selected_gb:
-            bot.send_message(chat_id, "⚠️ တောင်းပန်ပါတယ်ဗျာ။ ဤဆာဗာတွင် Bandwidth Pool လက်ကျန် မလုံလောက်တော့သဖြင့် GB လျှော့၍ ထုတ်ပေးပါရန်။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚠️ တောင်းပန်ပါတယ်ဗျာ။ ဤဆာဗာတွင် Bandwidth Pool လက်ကျန် မလုံလောက်တော့သဖြင့် GB လျှော့၍ ထုတ်ပေးပါရန်။", reply_markup=get_back_button())
             return
             
         email_id = f"TG_{tg_id}_{secrets.token_hex(3)}"
@@ -405,7 +414,6 @@ def handle_callbacks(call):
         if api_success:
             cursor.execute("UPDATE users SET credits = credits - ? WHERE telegram_id = ?", (selected_gb, tg_id))
             cursor.execute("UPDATE servers SET used_bandwidth = used_bandwidth + ? WHERE id = ?", (selected_gb, steps['server_id']))
-            # User ထုတ်ယူသွားသော Key ကို Database ထဲတွင် သိမ်းဆည်းရန်
             cursor.execute("INSERT INTO user_keys (telegram_id, server_id, email, total_gb) VALUES (?, ?, ?, ?)", (tg_id, steps['server_id'], email_id, selected_gb))
             conn.commit()
             
@@ -416,9 +424,9 @@ def handle_callbacks(call):
             success_msg += f"👇 _အောက်ပါစာသားကို ကလစ်တစ်ချက်နှိပ်ပြီး ကော်ပီကူးယူသုံးစွဲနိုင်ပါပြီ_ -\n\n"
             success_msg += f"`{final_key}`"
             
-            bot.send_message(chat_id, success_msg, parse_mode="Markdown", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=success_msg, parse_mode="Markdown", reply_markup=get_back_button())
         else:
-            bot.send_message(chat_id, "❌ ဆာဗာ API နှင့် ချိတ်ဆက်ရာတွင် ချို့ယွင်းချက်ရှိသဖြင့် ခရက်ဒစ် နှုတ်မယူလိုက်ပါ။ ခေတ္တစောင့်ပြီး ပြန်ကြိုးစားပါ။", reply_markup=get_main_menu())
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ ဆာဗာ API နှင့် ချိတ်ဆက်ရာတွင် ချို့ယွင်းချက်ရှိသဖြင့် ခရက်ဒစ် နှုတ်မယူလိုက်ပါ။ ခေတ္တစောင့်ပြီး ပြန်ကြိုးစားပါ။", reply_markup=get_back_button())
             
         if tg_id in user_steps:
             del user_steps[tg_id]
@@ -431,7 +439,6 @@ def handle_callbacks(call):
 
 @bot.message_handler(commands=['addserver'])
 def add_server_cmd(message):
-    # Admin ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
     if message.from_user.id not in ADMIN_IDS:
         bot.reply_to(message, "⛔ တောင်းပန်ပါတယ်။ ဤ Command ကို Admin များသာ အသုံးပြုနိုင်ပါသည်ဗျာ။")
         return
@@ -452,17 +459,14 @@ def add_server_cmd(message):
     except Exception as e:
         bot.reply_to(message, "⚠️ ပုံစံမမှန်ပါ။ ဥပမာ-\n`/addserver 🇸🇬_SG 127.0.0.1 sg.domain.com http://127.0.0.1:2053 admin adminpass vless 1`")
         
-# --- Admin: /listservers စနစ် (ဆာဗာစာရင်းကို Protocol အလိုက်ခွဲ၍ ကြည့်ရန်) ---
 @bot.message_handler(commands=['listservers'])
 def list_servers_cmd(message):
-    # Admin ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
     if message.from_user.id not in ADMIN_IDS:
         bot.reply_to(message, "⛔ တောင်းပန်ပါတယ်။ ဤ Command ကို Admin များသာ အသုံးပြုနိုင်ပါသည်ဗျာ။")
         return
         
     conn = sqlite3.connect("vpn_bot.db")
     cursor = conn.cursor()
-    # Protocol အလိုက် (vless, hysteria2) စီပြီးမှ ID အလိုက် ထပ်စီရန် ORDER BY သုံးထားပါသည်
     cursor.execute("SELECT id, name, protocol, ip FROM servers ORDER BY protocol, id")
     servers = cursor.fetchall()
     conn.close()
@@ -475,7 +479,6 @@ def list_servers_cmd(message):
     
     current_protocol = ""
     for srv in servers:
-        # Protocol မတူတာလာတိုင်း ခေါင်းစဉ်အသစ် တပ်ပေးရန်
         if srv[2] != current_protocol:
             current_protocol = srv[2]
             msg += f"🗂️ *{current_protocol.upper()} SERVERS*\n"
@@ -487,10 +490,8 @@ def list_servers_cmd(message):
     msg += "💡 ဖျက်လိုပါက `/removeserver ID` ဟု ရိုက်ထည့်ပါ။\n(ဥပမာ- Vless JP ဆာဗာ၏ ID က 3 ဆိုလျှင် `/removeserver 3` ဟု ရိုက်ထည့်ပါ)"
     bot.reply_to(message, msg, parse_mode="Markdown")
 
-# --- Admin: /gen {voucher numbers} {credit amount} စနစ် ---
 @bot.message_handler(commands=['gen'])
 def generate_voucher_cmd(message):
-    # Admin ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
     if message.from_user.id not in ADMIN_IDS:
         bot.reply_to(message, "⛔ တောင်းပန်ပါတယ်။ ဤ Command ကို Admin များသာ အသုံးပြုနိုင်ပါသည်ဗျာ။")
         return
@@ -505,7 +506,6 @@ def generate_voucher_cmd(message):
         codes = []
         
         for _ in range(count):
-            # ကျပန်း Voucher Code ထုတ်လုပ်ခြင်း (ဥပမာ: VOU-A1B2C3D4)
             code = "VOU-" + secrets.token_hex(4).upper()
             cursor.execute("INSERT INTO vouchers (code, amount) VALUES (?, ?)", (code, amount))
             codes.append(code)
