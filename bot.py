@@ -154,7 +154,13 @@ def get_main_menu():
     btn_gen = types.InlineKeyboardButton("🔑 Generate Key", callback_data="main_genkey")
     btn_mykeys = types.InlineKeyboardButton("📊 My Keys", callback_data="main_mykeys")
     btn_status = types.InlineKeyboardButton("🖥️ Server Status", callback_data="main_status")
+    
+    # လူကြီးမင်း အသစ်တိုးချဲ့လိုက်သော ခလုတ်များ
+    btn_buy = types.InlineKeyboardButton("💰 Buy Credits", callback_data="main_buycredits")
+    btn_channel = types.InlineKeyboardButton("📢 Channel", url="https://t.me/konosuba_210618")
+    
     markup.add(btn_info, btn_reg, btn_ref, btn_gen, btn_mykeys, btn_status)
+    markup.add(btn_buy, btn_channel) # လိုင်းအသစ်အနေနဲ့ အောက်ဆုံးမှာ ပြသပေးမည်
     return markup
 
 # နောက်ကို ပြန်သွားမည့် Back Button ကို သီးသန့်ရေးဆွဲထားခြင်း
@@ -343,6 +349,20 @@ def handle_callbacks(call):
             msg += "--------------------------\n"
             
         bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="Markdown", reply_markup=get_back_button())
+        
+    elif call.data == "main_buycredits":
+        msg = "💰 *Credits ဝယ်ယူရန် ဈေးနှုန်းစာရင်း*\n\n"
+        msg += "▪️ 100 credits = *4500 ks*\n"
+        msg += "▪️ 200 credits = *9000 ks*\n\n"
+        msg += "💬 ဝယ်ယူလိုပါက အောက်ပါ Admin Link မှတစ်ဆင့် ဆက်သွယ်စုံစမ်းနိုင်ပါသည်ဗျာ -\n"
+        
+        markup = types.InlineKeyboardMarkup()
+        btn_admin = types.InlineKeyboardButton("🧑‍💻 Contact Admin", url="https://t.me/strawhatchannel69")
+        btn_back = types.InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")
+        markup.add(btn_admin)
+        markup.add(btn_back)
+        
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=msg, parse_mode="Markdown", reply_markup=markup)
 
     elif call.data == "main_genkey":
         if user['credits'] < 1:
