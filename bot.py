@@ -509,6 +509,39 @@ def list_servers_cmd(message):
         
     msg += "💡 ဖျက်လိုပါက `/removeserver ID` ဟု ရိုက်ထည့်ပါ။\n(ဥပမာ- Vless JP ဆာဗာ၏ ID က 3 ဆိုလျှင် `/removeserver 3` ဟု ရိုက်ထည့်ပါ)"
     bot.reply_to(message, msg, parse_mode="Markdown")
+    
+@bot.message_handler(commands=['removeserver'])
+def remove_server_cmd(message):
+    # Admin ဟုတ်မဟုတ် စစ်ဆေးခြင်း
+    if message.from_user.id not in ADMIN_IDS:
+        bot.reply_to(message, "⛔ တောင်းပန်ပါတယ်။ ဤ Command ကို Admin များသာ အသုံးပြုနိုင်ပါသည်ဗျာ။")
+        return
+
+    try:
+        # ရိုက်ထည့်လိုက်သော စာသားထဲမှ Server ID ကို ရယူခြင်း
+        server_id = int(message.text.split()[1])
+        
+        conn = sqlite3.connect("vpn_bot.db")
+        cursor = conn.cursor()
+        
+        # ဖျက်မည့်ဆာဗာ တကယ်ရှိမရှိ အရင်စစ်ဆေးခြင်း
+        cursor.execute("SELECT name FROM servers WHERE id = ?", (server_id,))
+        server = cursor.fetchone()
+        
+        if server:
+            # ဆာဗာကို Database ထဲမှ ဖျက်ပစ်ခြင်း
+            cursor.execute("DELETE FROM servers WHERE id = ?", (server_id,))
+            conn.commit()
+            bot.reply_to(message, f"✅ ဆာဗာ '{server[0]}' (ID: {server_id}) ကို Database ထဲမှ အောင်မြင်စွာ ဖျက်ပစ်လိုက်ပါပြီဗျာ။")
+        else:
+            bot.reply_to(message, f"⚠️ Database ထဲတွင် ID '{server_id}' ဖြင့် မှတ်သားထားသော ဆာဗာ မရှိပါ။ `/listservers` ဖြင့် ပြန်လည်စစ်ဆေးပါ။", parse_mode="Markdown")
+            
+        conn.close()
+        
+    except IndexError:
+        bot.reply_to(message, "⚠️ ပုံစံမမှန်ပါ။ ဖျက်လိုသော ဆာဗာ၏ ID ကို ထည့်သွင်းပေးပါ။ ဥပမာ- `/removeserver 3`", parse_mode="Markdown")
+    except ValueError:
+        bot.reply_to(message, "⚠️ ပုံစံမမှန်ပါ။ ဆာဗာ ID သည် ဂဏန်းဖြစ်ရပါမည်။ ဥပမာ- `/removeserver 3`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['gen'])
 def generate_voucher_cmd(message):
