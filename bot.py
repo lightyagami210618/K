@@ -109,7 +109,7 @@ def add_client_to_3xui(server_info, client_id_or_pass, email, gb_limit):
         
     total_bytes = int(gb_limit * 1073741824)
     
-    if server_info['protocol'] == 'vless':
+    if server_info['protocol'] in ['vless', 'ais', 'dtac']:
         client_settings = {"id": client_id_or_pass, "flow": "", "encryption": "none", "level": 0, "alterId": 0}
     else:
         client_settings = {
@@ -369,8 +369,11 @@ def handle_callbacks(call):
             bot.answer_callback_query(call.id, "⚠️ ကီးထုတ်ရန် အနည်းဆုံး ၁ ခရက်ဒစ် ရှိရပါမည်။", show_alert=True)
             return
         markup = types.InlineKeyboardMarkup(row_width=2)
+        # Ais နှင့် Dtac ခလုတ်များ အသစ်တိုးထားခြင်း
         markup.add(types.InlineKeyboardButton("Vless", callback_data="proto_vless"),
                    types.InlineKeyboardButton("Hysteria2", callback_data="proto_hysteria2"))
+        markup.add(types.InlineKeyboardButton("Ais", callback_data="proto_ais"),
+                   types.InlineKeyboardButton("Dtac", callback_data="proto_dtac"))
         markup.add(types.InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu"))
         bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="⚙️ *အဆင့် (၁)* - အသုံးပြုလိုသည့် VPN Protocol ကို ရွေးချယ်ပေးပါ-", parse_mode="Markdown", reply_markup=markup)
 
@@ -426,7 +429,15 @@ def handle_callbacks(call):
             generated_uuid = str(uuid.uuid4())
             api_success = add_client_to_3xui(server_info, generated_uuid, email_id, selected_gb)
             final_key = f"vless://{generated_uuid}@{server_info['domain']}:443?type=ws&encryption=none&security=tls&path=%2Fassets&host={server_info['domain']}&sni={server_info['domain']}&fp=chrome&alpn=http%2F1.1#{selected_gb}GB_{server_info['name']}"
-        else:
+        elif server_info['protocol'] == 'ais':
+            generated_uuid = str(uuid.uuid4())
+            api_success = add_client_to_3xui(server_info, generated_uuid, email_id, selected_gb)
+            final_key = f"vless://{generated_uuid}@{server_info['ip']}:80?type=ws&encryption=none&flow=&host=auth.speedtest.net&path=%2F#{selected_gb}GB_{server_info['name']}"
+        elif server_info['protocol'] == 'dtac':
+            generated_uuid = str(uuid.uuid4())
+            api_success = add_client_to_3xui(server_info, generated_uuid, email_id, selected_gb)
+            final_key = f"vless://{generated_uuid}@www.true.th:80?type=ws&encryption=none&flow=&host={server_info['domain']}&path=%2F#{selected_gb}GB_{server_info['name']}"
+        else: # Hysteria2
             generated_pass = secrets.token_urlsafe(10)
             api_success = add_client_to_3xui(server_info, generated_pass, email_id, selected_gb)
             final_key = f"hysteria2://{generated_pass}@{server_info['ip']}:443?security=tls&obfs=salamander&obfs-password={UDP_MASK_PASSWORD}&insecure=1&sni=www.mpt.com.mm#{selected_gb}GB_{server_info['name']}"
