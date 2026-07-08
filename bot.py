@@ -435,7 +435,7 @@ def handle_callbacks(call):
         if server_info['protocol'] == 'vless':
             generated_uuid = str(uuid.uuid4())
             api_success = add_client_to_3xui(server_info, generated_uuid, email_id, selected_gb)
-            final_key = f"vless://{generated_uuid}@{server_info['domain']}:443?type=ws&encryption=none&security=tls&path=%2Fassets&host={server_info['domain']}&sni={server_info['domain']}&fp=chrome&alpn=http%2F1.1#{selected_gb}GB_{server_info['name']}"
+            final_key = f"vless://{generated_uuid}@{server_info['domain']}:443?type=ws&encryption=none&security=tls&path=%2F&host={server_info['domain']}&sni={server_info['domain']}&fp=chrome&alpn=http%2F1.1#{selected_gb}GB_{server_info['name']}"
         elif server_info['protocol'] == 'ais':
             generated_uuid = str(uuid.uuid4())
             api_success = add_client_to_3xui(server_info, generated_uuid, email_id, selected_gb)
