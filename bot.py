@@ -13,7 +13,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ========================================================
 # ၁။ CONFIGURATION (လူကြီးမင်း၏ အချက်အလက်များ ပြင်ဆင်ရန်နေရာ)
 # ========================================================
-BOT_TOKEN = "8971979121:AAHaCgwTf6lKT5r6q-sLMgxbyiqtCF4IkK4"  # BotFather မှရလာသော Token ထည့်ရန်
+BOT_TOKEN = ""  # BotFather မှရလာသော Token ထည့်ရန်
 BOT_USERNAME = "kazuma_210618_bot"            # @ မပါဘဲ Bot ၏ Username ထည့်ရန် (Referral လင့်ခ်အတွက်)
 
 # ADMIN များ၏ Telegram ID များကို ဤနေရာတွင် ထည့်ပါ
